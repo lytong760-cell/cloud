@@ -21,7 +21,7 @@ Kiến trúc này cũng giải quyết vấn đề về ngôn ngữ đa dạng t
 
 Trong kiến trúc hệ thống biên dịch lai được đề xuất, `module_main_compiler` viết bằng ngôn ngữ Zig đóng vai trò là trung tâm điều phối và điều hành, tương tự như một "Nhạc trưởng" điều phối các "nhà thầu chuyên biệt" [[67](https://kframework.org/docs/user_manual/)]. Nhiệm vụ cốt lõi của nó không phải là thực hiện mọi công việc một mình, mà là chịu trách nhiệm cho toàn bộ chuỗi quy trình từ đầu vào đến đầu ra, đảm bảo rằng các thành phần khác hoạt động một cách liền mạch và hiệu quả. Để thực hiện được vai trò này, `module_main_compiler` cần được thiết kế với ba chức năng chính: phân tích cú pháp ban đầu, điều phối các `sub_module_compiler` và quản lý vòng đời của quá trình biên dịch. Việc lựa chọn Zig cho thành phần này không chỉ là một yêu cầu mà còn là một quyết định chiến lược dựa trên những ưu điểm vượt trội của ngôn ngữ này trong bối cảnh xây dựng các công cụ hệ thống và trình biên dịch.
 
-Chức năng đầu tiên và quan trọng nhất của `module_main_compiler` là thực hiện một bước phân tích cú pháp sơ bộ trên mã nguồn ".ko". Dựa trên đặc tả ngôn ngữ, nó cần nhận diện các từ khóa đặc biệt và cấu trúc dữ liệu để xác định loại hành động mà người dùng muốn thực hiện. Ví dụ, khi gặp từ khóa `Import($CloudSim)`, nó phải biết rằng đây là lệnh nạp một thư viện chức năng mới và cần khởi tạo các subsysstem tương ứng [[67](https://kframework.org/docs/user_manual/)]. Khi gặp các thẻ hệ thống như `<for>` hoặc `<if>`, nó cần xác định ngữ cảnh thực thi [[67](https://kframework.org/docs/user_manual/)]. Đặc biệt, các lệnh nhạy cảm với phần cứng, như `Loop` (kích hoạt `Loop.cpp`) hoặc các lệnh do người dùng định nghĩa để tương tác với thư viện "Cloud", phải được `module_main_compiler` nhận diện và phân loại chính xác [[67](https://kframework.org/docs/user_manual/)]. Sau khi phân tích, nó sẽ tạo ra một biểu diễn nội tại, ví dụ như một cây cú pháp trừu tượng (AST) hoặc một cấu trúc dữ liệu đơn giản hơn, chứa thông tin về cấu hình phần cứng và hành động cần thực hiện. Zig, với khả năng biên dịch nhanh và mã nguồn rõ ràng, là một lựa chọn lý tưởng để xây dựng một trình phân tích cú pháp hiệu quả và dễ bảo trì [[1](https://ziggit.dev/t/fastest-programming-language-c-vs-rust-vs-zig-dave-plummer-and-lex-fridman/11865)].
+Chức năng đầu tiên và quan trọng nhất của `module_main_compiler` là thực hiện một bước phân tích cú pháp sơ bộ trên mã nguồn ".ko". Dựa trên đặc tả ngôn ngữ, nó cần nhận diện các từ khóa đặc biệt và cấu trúc dữ liệu để xác định loại hành động mà người dùng muốn thực hiện. Ví dụ, khi gặp từ khóa `Import($Cloud)`, nó phải biết rằng đây là lệnh nạp một thư viện chức năng mới và cần khởi tạo các subsysstem tương ứng [[67](https://kframework.org/docs/user_manual/)]. Khi gặp các thẻ hệ thống như `<for>` hoặc `<if>`, nó cần xác định ngữ cảnh thực thi [[67](https://kframework.org/docs/user_manual/)]. Đặc biệt, các lệnh nhạy cảm với phần cứng, như `**Loop**` (kích hoạt `Loop.cpp`) hoặc các lệnh do người dùng định nghĩa để tương tác với thư viện "Cloud", phải được `module_main_compiler.zig` nhận diện và phân loại chính xác [[67](https://kframework.org/docs/user_manual/)]. Sau khi phân tích, nó sẽ tạo ra một biểu diễn nội tại, ví dụ như một cây cú pháp trừu tượng (AST) hoặc một cấu trúc dữ liệu đơn giản hơn, chứa thông tin về cấu hình phần cứng và hành động cần thực hiện. Zig, với khả năng biên dịch nhanh và mã nguồn rõ ràng, là một lựa chọn lý tưởng để xây dựng một trình phân tích cú pháp hiệu quả và dễ bảo trì [[1](https://ziggit.dev/t/fastest-programming-language-c-vs-rust-vs-zig-dave-plummer-and-lex-fridman/11865)].
 
 Sau khi có được biểu diễn nội tại, chức năng thứ hai của `module_main_compiler` là điều phối các `sub_module_compiler`. Đây là trái tim của kiến trúc lai. Thay vì cố gắng làm tất cả mọi thứ, `module_main_compiler` sẽ đóng gói các thông số cấu hình và gửi chúng đến các nhà thầu chuyên nghiệp tương ứng. Ví dụ, nếu hành động là "mô phỏng CPU", nó sẽ đóng gói cấu hình CPU (số lõi, kích thước cache, v.v.) và gọi một `sub_module_compiler` được viết bằng C++ để sinh ra mã Python cho gem5. Nếu hành động là "gắn GPU", nó sẽ gửi thông tin PCI ID của thiết bị đến một `sub_module_compiler` được viết bằng C, vốn có khả năng tiếp cận thấp và tương tác hiệu quả với các driver Linux. Zig cung cấp một cơ chế FFI (Foreign Function Interface) cực kỳ mạnh mẽ và thân thiện, cho phép nó dễ dàng gọi các hàm từ các thư viện được biên dịch trước, bao gồm cả các thư viện C/C++ [[7](https://ziggit.dev/t/learning-c-interop-and-low-level-concepts-coming-from-high-level-language-background/5818), [158](https://ziglang.org/learn/overview/)]. Bằng cách sử dụng `@cImport` để nhập các định nghĩa hàm từ header files, `module_main_compiler` có thể tương tác một cách liền mạch với các `sub_module_compiler` khác mà không cần các lớp wrapper phức tạp [[7](https://ziggit.dev/t/learning-c-interop-and-low-level-concepts-coming-from-high-level-language-background/5818)]. Hơn nữa, hệ thống build của Zig, `build.zig`, cho phép tự động hóa toàn bộ quy trình biên dịch và liên kết các `sub_module_compiler` này lại với nhau, tạo thành một hệ sinh thái biên dịch tích hợp và mạnh mẽ [[94](https://news.ycombinator.com/item?id=48786638)].
 
@@ -76,32 +76,62 @@ Bên cạnh việc tương tác với phần cứng tại chỗ, thư viện "Cl
 | **Tạo Kịch bản Mô phỏng & Cấu hình Linh hoạt** | **Lua / Python** | Tốc độ phát triển nhanh, tính linh hoạt cao, cú pháp đơn giản, cộng đồng lớn với nhiều thư viện hỗ trợ. [[10](https://q2dg.github.io/LPIC2/LPIC-2_LPIC_Study_Guide(2016).pdf), [73](https://github.com/jaywcjlove/programming-language-timeline)] |
 | **Hỗ trợ Toàn diện & Tích hợp** | **Zig** | FFI mạnh mẽ, khả năng tích hợp liền mạch với C/C++, hệ thống build tích hợp, mã nguồn dễ đọc, dễ bảo trì. [[94](https://news.ycombinator.com/item?id=48786638), [158](https://ziglang.org/learn/overview/)] |
 
+
+
+
+### Cú Pháp 
+Cú pháp chính Thức 
+Hãy Import Vào Code Của bạn 
+```
+**Import**($Cloud)@also%~cloud!`global`:cloud
+```
+Cách Tạo 1 cpu 
+
 Dưới đây là một quy trình hoạt động mẫu minh họa cách các thành phần này phối hợp với nhau để thực hiện một tác vụ cụ thể:
 
 **Bước 1: Người dùng viết mã nguồn ".ko"**
 Người dùng bắt đầu bằng cách viết một chương trình ".ko" sử dụng các API do thư viện "Cloud" cung cấp. Chương trình này sẽ định nghĩa cấu hình phần cứng và các hành động cần thực hiện.
 ```ko
-// Import thư viện Cloud
-Import($Cloud) @also %~cloud!`global`:cloud
-
-// Khai báo cấu hình CPU
+| Import thư viện Cloud |
+**Import**($Cloud)@also%~cloud!`global`:cloud
+my_spec @device [
+| Khai báo cấu hình CPU |
 int(8)~core_count
 int(16)~thread_count
 int(256)~l3_cache_gb
 string("SP5")~socket_type
-~my_cpu_spec = (cores=~core_count, threads=~thread_count, l3_cache=~l3_cache_gb, socket=~socket_type)
+$cloud.cpu[.core(core_count,thread_count),.cache{13_cache_gb}$.gb),.sokcket(socket_type)])
 
-// Bắt đầu mô phỏng với gem5
-<cloud>.start_simulation("gem5", ~my_cpu_spec)
 
-// Kết nối một GPU vật lý (giả sử có ID PCI)
-<cloud>.attach_device("gpu0", "vfio-pci", {"pci_id": "0000:01:00.0"})
+
+$cloud.gpu [
+  .core(
+  .cuda_core(7168)
+)
+  .vram(16,{"6X"})$.gb
+  .bus_width(2475)$.mhz
+  .bit(128)
+  .pci(
+  .id("10DE")
+  .address(0000:01:00.0)
+)
+  
+]
+$cloud.ram({32}$.gb,{6000}$.mhz,"DDR 5") 
+$cloud.storage({2}$.tb) [
+  .r(7450)
+  .w(6900)
+]
+
+[
+<$cloud>.start_simulation("gem5", my__spec)
+]
 ```
 
 **Bước 2: `module_main_compiler` (Zig) phân tích và điều phối**
 `module_main_compiler` nhận mã nguồn này và thực hiện các bước sau:
 1.  **Phân tích cú pháp:** Sử dụng các kỹ thuật phân tích cú pháp để nhận diện các cấu trúc và từ khóa. Nó nhận ra `Import($Cloud)` và khởi tạo subsysstem tương ứng. Nó cũng nhận ra các hàm `start_simulation` và `attach_device`.
-2.  **Xác định tác vụ:** Dựa vào tên hàm được gọi (`start_simulation` vs `attach_device`), nó xác định đây là hai tác vụ hoàn toàn khác nhau: một cái là mô phỏng, cái kia là tương tác thực.
+2.  **Xác định tác vụ:** Dựa vào tên hàm được gọi (`start_simulation` ), nó xác định đây là hai tác vụ hoàn toàn khác nhau: một cái là mô phỏng, cái kia là tương tác thực.
 3.  **Chuyển đổi sang các sub-module:** Nó đóng gói các tham số (cấu hình CPU `my_cpu_spec` hoặc thông tin thiết bị `{"pci_id": ...}`) và gọi vào các `sub_module_compiler` phù hợp thông qua FFI. Ví dụ, nó sẽ gọi một hàm trong `gem5_generator.so` (biên dịch từ Lua/C++) với `my_cpu_spec` làm tham số, và gọi một hàm trong `vfio_driver.so` (biên dịch từ C/Rust) với thông tin PCI ID.
 
 **Bước 3: Các `sub_module_compiler` thực thi và sinh ra đầu ra**
@@ -109,4 +139,4 @@ string("SP5")~socket_type
 *   **`vfio_driver` (C/Rust):** Nhận thông tin PCI ID, nó sẽ thực thi các call syscalls của Linux VFIO. Nó sẽ tìm kiếm thiết bị tại địa chỉ PCI đó, chiếm giữ nó (bind it to the vfio driver), và đảm bảo nó sẵn sàng để được gắn vào một tiến trình hoặc VM khác. Nó có thể trả về một mã trạng thái thành công hoặc thất bại.
 
 **Bước 4: Hoàn thành và báo cáo**
-Sau khi các tác vụ con hoàn tất, `module_main_compiler` tổng hợp kết quả. Nếu là mô phỏng, nó có thể báo cáo rằng "Đã tạo tệp kịch bản mô phỏng thành công tại `./output/config.py`". Nếu là tương tác thực, nó có thể báo cáo "Đã gắn thiết bị GPU thành công". Bằng cách này, `module_main_compiler` đóng vai trò là một lớp dịch vụ, chuyển đổi các câu lệnh trừu tượng của người dùng thành các hành động cụ thể và có ý nghĩa trong thế giới thực, đồng thời ẩn đi sự phức tạp của việc tương tác với các hệ thống mô phỏng và phần cứng khác nhau. Quy trình này minh họa cách một kiến trúc đa ngôn ngữ và phân tán có thể tạo ra một hệ thống mạnh mẽ, linh hoạt và hiệu quả, đáp ứng đầy đủ và vượt ra ngoài các yêu cầu ban đầu của đặc tả.
+Sau khi các tác vụ con hoàn tất, `module_main_compiler` tổng hợp kết quả. . Bằng cách này, `module_main_compiler` đóng vai trò là một lớp dịch vụ, chuyển đổi các câu lệnh trừu tượng của người dùng thành các hành động cụ thể và có ý nghĩa trong thế giới thực, đồng thời ẩn đi sự phức tạp của việc tương tác với các hệ thống mô phỏng và phần cứng khác nhau. Quy trình này minh họa cách một kiến trúc đa ngôn ngữ và phân tán có thể tạo ra một hệ thống mạnh mẽ, linh hoạt và hiệu quả, đáp ứng đầy đủ và vượt ra ngoài các yêu cầu ban đầu của đặc tả.
